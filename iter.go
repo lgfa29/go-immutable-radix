@@ -7,8 +7,9 @@ import (
 // Iterator is used to iterate over a set of nodes
 // in pre-order
 type Iterator struct {
-	node  *Node
-	stack []edges
+	node      *Node
+	stack     []edges
+	backwards *bool
 }
 
 // SeekPrefixWatch is used to seek the iterator to a given prefix
@@ -152,6 +153,35 @@ func (i *Iterator) SeekLowerBound(key []byte) {
 
 // Next returns the next node in order
 func (i *Iterator) Next() ([]byte, interface{}, bool) {
+	// Initialize our movement direction if needed
+	if i.backwards == nil {
+		falsePtr := false
+		i.backwards = &falsePtr
+	}
+
+	if *i.backwards {
+		return nil, nil, false
+	}
+
+	return i.move()
+}
+
+// Prev returns the next node in reverse order
+func (i *Iterator) Prev() ([]byte, interface{}, bool) {
+	// Initialize our movement direction if needed
+	if i.backwards == nil {
+		truePtr := true
+		i.backwards = &truePtr
+	}
+
+	if !*i.backwards {
+		return nil, nil, false
+	}
+
+	return i.move()
+}
+
+func (i *Iterator) move() ([]byte, interface{}, bool) {
 	// Initialize our stack if needed
 	if i.stack == nil && i.node != nil {
 		i.stack = []edges{
@@ -162,17 +192,7 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 	}
 
 	for len(i.stack) > 0 {
-		// Inspect the last element of the stack
-		n := len(i.stack)
-		last := i.stack[n-1]
-		elem := last[0].node
-
-		// Update the stack
-		if len(last) > 1 {
-			i.stack[n-1] = last[1:]
-		} else {
-			i.stack = i.stack[:n-1]
-		}
+		elem := i.popElement()
 
 		// Push the edges onto the frontier
 		if len(elem.edges) > 0 {
@@ -184,5 +204,38 @@ func (i *Iterator) Next() ([]byte, interface{}, bool) {
 			return elem.leaf.key, elem.leaf.val, true
 		}
 	}
+
 	return nil, nil, false
+}
+
+func (i *Iterator) popElement() *Node {
+	var elem *Node
+
+	if *i.backwards {
+		// Inspect the first element of the stack
+		first := i.stack[0]
+		n := len(first)
+		elem = first[n-1].node
+
+		// Update the stack
+		if len(first) > 1 {
+			i.stack[0] = first[:n-1]
+		} else {
+			i.stack = i.stack[1:]
+		}
+	} else {
+		// Inspect the last element of the stack
+		n := len(i.stack)
+		last := i.stack[n-1]
+		elem = last[0].node
+
+		// Update the stack
+		if len(last) > 1 {
+			i.stack[n-1] = last[1:]
+		} else {
+			i.stack = i.stack[:n-1]
+		}
+	}
+
+	return elem
 }
